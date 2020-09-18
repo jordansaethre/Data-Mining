@@ -1,0 +1,342 @@
+---
+title: "Blackbox Methods"
+author: "Jordan Saethre"
+date: "July 4, 2017"
+output:
+  html_document:
+    number_sections: yes
+    toc: yes
+    fig_width: 20
+    fig_height: 10
+---
+
+# Set up, Data Import, and Data Inspection
+```{r setup}
+# 1. A. 
+
+# Set up, data import and inspection code
+# Load packages and import data (note: two datasets). Do transformation if necessary. 
+# Show the overall structure and summary of the input data files.
+
+library(caret)
+library(kernlab)
+library(knitr)
+library(matrixStats)
+library(rminer)
+library(RWeka)
+
+setwd("C:/Users/jordan.saethre/Documents/IS 6482")
+
+inputfile <- "C:/Users/jordan.saethre/Documents/IS 6482/bike_share2012.csv"
+
+bike <- read.csv(file = inputfile, stringsAsFactors = TRUE)
+
+str(bike)
+
+summary(bike)
+
+
+inputfile2 <- "C:/Users/jordan.saethre/Documents/IS 6482/bank_full.csv"
+
+bank <- read.csv(file = inputfile2, stringsAsFactors = TRUE)
+
+str(bank)
+
+summary(bank)
+
+```
+
+# MultilayerPercentron ANN method in RWeka
+
+```{r mlp}
+# 2. A. i.-ii.	
+
+# Build and examine the topologies of ANN models using the function multilayerperceptron 
+# in RWeka (Hereafter, they are called MLP models.)
+
+# Use the entire bike_share2012 data set, build MLP models and examine topologies, summaries 
+# and training performances of the built models using the following numbers of hidden layer and hidden nodes:
+
+# H=0, H='a', H='t', H='i', H='o', and H='h1, h1'. 
+# Here h1 is a number of your choice. Try a few different values of h1. Select only one h1 in the final 
+# code you submit. To reduce output file size, show the ANN topology for H='a' ONLY.
+
+# Use default values of other parameters - L, M and N when building all of the models for 2.A.i.
+
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+MLP(ttlrent ~ season + month + hour + holiday + weekday + weathersit + temp + humidity + 
+      windspeed, data = bike)
+
+l <- 0.3
+m <- 0.2
+n <-500
+h <- 'a'
+
+model_0_bike <- MLP(ttlrent ~ season + month + hour + holiday + weekday + weathersit + temp + humidity + 
+                      windspeed, data = bike,control = Weka_control(L=l,M=m, N=n,H=0))
+
+model_a_bike <- MLP(ttlrent ~ season + month + hour + holiday + weekday + weathersit + temp + humidity + 
+                      windspeed, data = bike,control = Weka_control(L=l,M=m, N=n,H=h))  
+
+model_a_bike
+
+model_t_bike <- MLP(ttlrent ~ season + month + hour + holiday + weekday + weathersit + temp + humidity + 
+                      windspeed, data = bike,control = Weka_control(L=l,M=m, N=n,H='t'))
+
+model_i_bike <- MLP(ttlrent ~ season + month + hour + holiday + weekday + weathersit + temp + humidity + 
+                      windspeed, data = bike,control = Weka_control(L=l,M=m, N=n,H='i'))
+
+model_o_bike <- MLP(ttlrent ~ season + month + hour + holiday + weekday + weathersit + temp + humidity + 
+                      windspeed, data = bike,control = Weka_control(L=l,M=m, N=n,H='o'))
+
+model_11_11_bike <- MLP(ttlrent ~ season + month + hour + holiday + weekday + weathersit + temp + humidity + 
+                          windspeed, data = bike,control = Weka_control(L=l,M=m, N=n,H='11,11'))
+
+
+# 2. B. i.-ii.	
+# Use the entire bank_full data set, build MLP models and examine topologies, summaries and training
+# performances of the built models using the following numbers of hidden layer and hidden nodes:
+
+# H=0, H='a', H='t', H='i', H='o', and H='h1, h1'. Here h1 is a number of your choice. Try a few 
+# different values of h1. Select only one h1 in the final code you submit. To reduce output file size, 
+# show the ANN topology for H='a' ONLY.
+
+# Use default values of other parameters - L, M and N when building all of the models for 2.B.i.
+
+MLP(deposit ~ .,data = bank)
+
+model_0_bank <- MLP(deposit ~ .,data = bank,control = Weka_control(L=l,M=m, N=n,H=0))
+
+model_a_bank <- MLP(deposit ~ .,data = bank,control = Weka_control(L=l,M=m, N=n,H=h))  
+
+model_a_bank
+
+model_t_bank <- MLP(deposit ~ .,data = bank,control = Weka_control(L=l,M=m, N=n,H='t'))
+
+model_i_bank <- MLP(deposit ~ .,data = bank,control = Weka_control(L=l,M=m, N=n,H='i'))
+
+model_o_bank <- MLP(deposit ~ .,data = bank,control = Weka_control(L=l,M=m, N=n,H='o'))
+
+model_11_11_bank <- MLP(deposit ~ .,data = bank,control = Weka_control(L=l,M=m, N=n,H='11,11'))
+```
+
+# Cross Validation Functions
+```{r cross validation}
+# 3. A.	
+# Define a named function for cross-validation evaluation of MLP models with learning rate, momentum, 
+# the number of epochs and the number of hidden layer nodes in one hidden layer included as input arguments 
+# in addition to df, target, nFolds, seedVal and metrics_list.
+
+cv_function_MLP <- function(df, target, nFolds, seedVal, metrics_list, l, m, n, h)
+{
+  # create folds using the assigned values
+  
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds)
+  
+  # The lapply loop
+  
+  cv_results <- lapply(folds, function(x)
+  { 
+    # data preparation:
+    
+    test_target <- df[x,target]
+    test_input <- df[x,-target]
+    
+    train_target <- df[-x,target]
+    train_input <- df[-x,-target]
+    pred_model <- MLP(train_target ~ .,data = train_input,control = Weka_control(L=l,M=m, N=n,H=h))  
+    pred <- predict(pred_model, test_input)
+    return(mmetric(test_target,pred,metrics_list))
+  })
+  
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  colnames(cv_mean) <- "Mean"
+  colnames(cv_sd) <- "Sd"
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  kable(t(cbind(cv_mean,cv_sd)),digits=2)
+}
+
+# 3. B.	
+# Define a named function for cross validation evaluation of ksvm models with kernel function and cost 
+# factor included as input arguments in addition to df, target, nFolds, seedVal and metrics_list.
+
+cv_function_ksvm <- function(df,target,nFolds,seedVal,metrics_list,kern,c)
+{
+  # create folds using the assigned values
+  
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds)
+  
+  # The lapply loop
+  
+  cv_results <- lapply(folds, function(x)
+  { 
+    # data preparation:
+    
+    test_target <- df[x,target]
+    test_input <- df[x,-target]
+    
+    train_target <- df[-x,target]
+    train_input <- df[-x,-target]
+    pred_model <- ksvm(train_target ~ .,data = train_input,kernel=kern, C=c)  
+    pred <- predict(pred_model, test_input)
+    return(mmetric(test_target,pred,metrics_list))
+  })
+  
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  colnames(cv_mean) <- "Mean"
+  colnames(cv_sd) <- "Sd"
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  kable(t(cbind(cv_mean,cv_sd)),digits=2)
+}
+```
+
+# Calling cv_function_mlp Functions
+```{r calling cv mlp}
+# 4. A. i.- ii.	
+# Call the cv function defined in 3.A to build and evaluate MLP models. Set the number of folds to 3.
+
+# Use the bike_share2012 data set for the following tasks.
+
+# Use the default values of L, M, N and H to build and evaluate MLP models.
+
+# Try different combinations of L, M and N values that are different from their default values to build 
+# and evaluate models, while keeping H at its default value. Choose two combinations in your final code 
+# based on a balance of model performance and speed.
+
+df <- bike[,3:12]
+target <- 10
+seedVal <- 500
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+
+l <- 0.3
+m <- 0.2
+n <- 500
+h <- 'a'
+
+cv_function_MLP(df, target, 3, seedVal, metrics_list, l, m, n, h)
+
+l <- 0.2
+m <- 0.1
+n <- 750
+
+cv_function_MLP(df, target, 3, seedVal, metrics_list, l, m, n, h)
+
+l <- 0.02
+m <- 0.01
+n <- 1000
+
+cv_function_MLP(df, target, 3, seedVal, metrics_list, l, m, n, h)
+
+# 4. B. i. - ii.
+# Use the bank_full data set for the following tasks.
+
+# Use the default values of L, M, N and H to build and evaluate MLP models.
+
+# Try different combinations of L, M and N values that are different from their default values to build 
+# and evaluate models, while keeping H at its default value. Choose two combinations in your final code 
+# based on a balance of model performance and speed.
+
+df <- bank
+target <- 1
+seedVal <- 500
+metrics_list <- c("ACC","TPR","PRECISION","F1")
+
+l <- 0.3
+m <- 0.2
+n <- 500
+h <- 'a'
+
+cv_function_MLP(df, target, 3, seedVal, metrics_list, l, m, n, h)
+
+l <- 0.2
+m <- 0.1
+n <- 750
+
+cv_function_MLP(df, target, 3, seedVal, metrics_list, l, m, n, h)
+
+l <- 0.02
+m <- 0.01
+n <- 1000
+
+cv_function_MLP(df, target, 3, seedVal, metrics_list, l, m, n, h)
+
+# 4. C.	
+# Write a few sentences to describe how different parameters affect the results for each of the two datasets 
+# - bike_share2012 and bank_full - respectively.
+
+# In the bike data set a lower learning rate and lower momentum with a high number of epochs seems to have 
+# better performance.
+
+# There was a similar imporvement with the same changes to l, m, and n.
+```
+
+# Calling cv_function_ksvm
+```{r cv ksvm}
+# 5. A. i. - ii.	
+# Call the cv function defined in 3.B to build and evaluate ksvm models. Set the number of folds to 3.
+
+# Use the bike_share2012 data set for the following tasks.
+
+# Use the default kernel and cost values of 'rbfdot' and 1 to build and evaluate ksvm models.
+
+# Try different combinations of kernel functions and cost values that are different from their default 
+# values to build and evaluate models. Choose only two combinations in your final code based on a balance 
+# of model performance and speed.
+
+df <- bike[,3:12]
+target <- 10
+seedVal <- 500
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+
+cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'rbfdot', 1)
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'laplacedot', 1)
+
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'rbfdot', 5)
+cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'laplacedot', 5)
+
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'rbfdot', 10)
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'laplacedot', 10)
+
+cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'rbfdot', 20)
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'laplacedot', 20)
+
+# 5. B. i. - ii.
+# Use the bank_full data set for the following tasks.
+
+# Use the default kernel and cost values of 'rbfdot' and 1 to build and evaluate ksvm models.
+
+# Try different combinations of kernel functions and cost values that are different from their default 
+# values to build and evaluate models.  Choose only two combinations in your final code based on a balance 
+# of model performance and speed.
+
+df <- bank
+target <- 1
+seedVal <- 500
+metrics_list <- c("ACC","TPR","PRECISION","F1")
+
+cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'rbfdot', 1)
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'laplacedot', 1)
+
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'rbfdot', 5)
+cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'laplacedot', 5)
+
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'rbfdot', 10)
+cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'laplacedot', 10)
+
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'rbfdot', 20)
+#cv_function_ksvm(df, target, 3, seedVal, metrics_list, 'laplacedot', 20)
+
+#5. C.	
+# Write a few sentences to describe how different parameters affect the results for each of the two datasets 
+# - bike_share2012 and bank_full - respectively.
+
+# For the Bike data set the higher the C value the better the model seemed to perform based on R2. 
+# For the Bank data set all the combinations of parameters worked very fast and all had similar results. 
+
+```
